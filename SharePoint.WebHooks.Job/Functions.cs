@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -13,7 +13,7 @@ namespace SharePoint.WebHooks.Job
     public class Functions
     {
         // This function will get triggered/executed when a new message is written 
-        // on an Azure Queue called queue. This triggering is done due to the QueueTrigger attribute
+        // on an Azure Queue called queue.
         public static void ProcessQueueMessage([QueueTrigger(ChangeManager.StorageQueueName)] NotificationModel notification, TextWriter log)
         {
             log.WriteLine(String.Format("Processing subscription {0} for site {1}", notification.SubscriptionId, notification.SiteUrl));

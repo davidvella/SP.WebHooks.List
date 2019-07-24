@@ -330,7 +330,7 @@ namespace SharePoint.WebHooks.Common
                     return RedirectionStatus.Ok;
                 }
             }
-            catch (SecurityTokenExpiredException)
+            catch (Exception)
             {
                 contextTokenExpired = true;
             }
