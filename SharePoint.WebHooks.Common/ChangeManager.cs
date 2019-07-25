@@ -4,11 +4,15 @@ using Microsoft.WindowsAzure;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Queue;
 using Newtonsoft.Json;
+using Noggle.TikaOnDotNet.Parser;
 using OfficeDevPnP.Core;
 using SharePoint.WebHooks.Common.Models;
 using SharePoint.WebHooks.Common.SQL;
+using SharePoint.WebHooks.Common.TextAnalytics;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -35,6 +39,7 @@ namespace SharePoint.WebHooks.Common
         {
             CloudStorageAccount storageAccount =CloudStorageAccount.Parse(storageConnectionString);
 
+            var test = new TextAnalyticsClient();
             // Get queue... create if does not exist.
             CloudQueueClient queueClient = storageAccount.CreateCloudQueueClient();
             CloudQueue queue = queueClient.GetQueueReference(ChangeManager.StorageQueueName);
@@ -85,15 +90,6 @@ namespace SharePoint.WebHooks.Common
                 {
                     // list has been deleted inbetween the event being fired and the event being processed
                     return;
-                }
-                #endregion
-
-                #region Grab the list used to write the web hook history
-                // Ensure reference to the history list, create when not available
-                List historyList = cc.Web.GetListByTitle("WebHookHistory");
-                if (historyList == null)
-                {
-                    historyList = cc.Web.CreateList(ListTemplateType.GenericList, "WebHookHistory", false);
                 }
                 #endregion
 
@@ -149,7 +145,7 @@ namespace SharePoint.WebHooks.Common
                                 if (change is ChangeItem)
                                 {
                                     // do "work" with the found change
-                                    DoWork(cc, changeList, historyList, change);
+                                    DoWork(cc, changeList, change);
                                 }
                             }
 
@@ -234,13 +230,38 @@ namespace SharePoint.WebHooks.Common
         /// Method doing actually something with the changes obtained via the web hook notification. 
         /// In this demo we're just logging to a list, in your implementation you do what you need to do :-)
         /// </summary>
-        private static void DoWork(ClientContext cc, List changeList, List historyList, Change change)
+        private static void DoWork(ClientContext cc, List changeList, Change change)
         {
-            ListItemCreationInformation newItem = new ListItemCreationInformation();
-            ListItem item = historyList.AddItem(newItem);
+            // Get the list item from the Change List
+            // Note that this is the ID of the item in the list, not a reference to its position.
+            ListItem targetListItem = changeList.GetItemById((change as ChangeItem).ItemId);
+                       
+            cc.Load(targetListItem);
+            cc.Load(targetListItem.File);
+            cc.ExecuteQueryRetry();
 
-            item["Title"] = string.Format("List {0} had a Change of type \"{1}\" on the item with Id {2}.", changeList.Title, change.ChangeType.ToString(), (change as ChangeItem).ItemId); 
-            item.Update();
+            // Get the File Binary Stream
+            var streamResult = targetListItem.File.OpenBinaryStream();
+            cc.ExecuteQueryRetry();
+
+            // Get Text Rendition
+            var tika = new Tika();
+            string textFromStream = tika.ParseToString(streamResult.Value);
+
+            var client = new TextAnalyticsClient();
+            var result = client.KeyPhrasesStringAsync(textFromStream).Result;
+
+            var keyPhrases = new List<string>();
+            foreach (var row in result.Documents)
+            {
+                foreach (var kp in row.KeyPhrases)
+                {
+                    keyPhrases.Add(kp);
+                }
+            }
+
+            targetListItem["KeyPhrases"] = string.Join(",", keyPhrases);
+            targetListItem.SystemUpdate();
             cc.ExecuteQueryRetry();
         }
 
