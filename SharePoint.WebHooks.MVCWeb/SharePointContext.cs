@@ -46,7 +46,7 @@ namespace SharePoint.WebHooks.MVCWeb
                 throw new ArgumentNullException("httpRequest");
             }
 
-            string spHostUrlString = TokenHelper.EnsureTrailingSlash(httpRequest.QueryString[SPHostUrlKey]);
+            var spHostUrlString = TokenHelper.EnsureTrailingSlash(httpRequest.QueryString[SPHostUrlKey]);
             Uri spHostUrl;
             if (Uri.TryCreate(spHostUrlString, UriKind.Absolute, out spHostUrl) &&
                 (spHostUrl.Scheme == Uri.UriSchemeHttp || spHostUrl.Scheme == Uri.UriSchemeHttps))
@@ -321,7 +321,7 @@ namespace SharePoint.WebHooks.MVCWeb
             }
 
             redirectUrl = null;
-            bool contextTokenExpired = false;
+            var contextTokenExpired = false;
 
             try
             {
@@ -342,7 +342,7 @@ namespace SharePoint.WebHooks.MVCWeb
                 return RedirectionStatus.CanNotRedirect;
             }
 
-            Uri spHostUrl = SharePointContext.GetSPHostUrl(httpContext.Request);
+            var spHostUrl = SharePointContext.GetSPHostUrl(httpContext.Request);
 
             if (spHostUrl == null)
             {
@@ -354,7 +354,7 @@ namespace SharePoint.WebHooks.MVCWeb
                 return RedirectionStatus.CanNotRedirect;
             }
 
-            Uri requestUrl = httpContext.Request.Url;
+            var requestUrl = httpContext.Request.Url;
 
             var queryNameValueCollection = HttpUtility.ParseQueryString(requestUrl.Query);
 
@@ -368,16 +368,16 @@ namespace SharePoint.WebHooks.MVCWeb
             // Adds SPHasRedirectedToSharePoint=1.
             queryNameValueCollection.Add(SPHasRedirectedToSharePointKey, "1");
 
-            UriBuilder returnUrlBuilder = new UriBuilder(requestUrl);
+            var returnUrlBuilder = new UriBuilder(requestUrl);
             returnUrlBuilder.Query = queryNameValueCollection.ToString();
 
             // Inserts StandardTokens.
             const string StandardTokens = "{StandardTokens}";
-            string returnUrlString = returnUrlBuilder.Uri.AbsoluteUri;
+            var returnUrlString = returnUrlBuilder.Uri.AbsoluteUri;
             returnUrlString = returnUrlString.Insert(returnUrlString.IndexOf("?") + 1, StandardTokens + "&");
 
             // Constructs redirect url.
-            string redirectUrlString = TokenHelper.GetAppContextTokenRequestUrl(spHostUrl.AbsoluteUri, Uri.EscapeDataString(returnUrlString));
+            var redirectUrlString = TokenHelper.GetAppContextTokenRequestUrl(spHostUrl.AbsoluteUri, Uri.EscapeDataString(returnUrlString));
 
             redirectUrl = new Uri(redirectUrlString, UriKind.Absolute);
 
@@ -408,14 +408,14 @@ namespace SharePoint.WebHooks.MVCWeb
             }
 
             // SPHostUrl
-            Uri spHostUrl = SharePointContext.GetSPHostUrl(httpRequest);
+            var spHostUrl = SharePointContext.GetSPHostUrl(httpRequest);
             if (spHostUrl == null)
             {
                 return null;
             }
 
             // SPAppWebUrl
-            string spAppWebUrlString = TokenHelper.EnsureTrailingSlash(httpRequest.QueryString[SharePointContext.SPAppWebUrlKey]);
+            var spAppWebUrlString = TokenHelper.EnsureTrailingSlash(httpRequest.QueryString[SharePointContext.SPAppWebUrlKey]);
             Uri spAppWebUrl;
             if (!Uri.TryCreate(spAppWebUrlString, UriKind.Absolute, out spAppWebUrl) ||
                 !(spAppWebUrl.Scheme == Uri.UriSchemeHttp || spAppWebUrl.Scheme == Uri.UriSchemeHttps))
@@ -424,21 +424,21 @@ namespace SharePoint.WebHooks.MVCWeb
             }
 
             // SPLanguage
-            string spLanguage = httpRequest.QueryString[SharePointContext.SPLanguageKey];
+            var spLanguage = httpRequest.QueryString[SharePointContext.SPLanguageKey];
             if (string.IsNullOrEmpty(spLanguage))
             {
                 return null;
             }
 
             // SPClientTag
-            string spClientTag = httpRequest.QueryString[SharePointContext.SPClientTagKey];
+            var spClientTag = httpRequest.QueryString[SharePointContext.SPClientTagKey];
             if (string.IsNullOrEmpty(spClientTag))
             {
                 return null;
             }
 
             // SPProductNumber
-            string spProductNumber = httpRequest.QueryString[SharePointContext.SPProductNumberKey];
+            var spProductNumber = httpRequest.QueryString[SharePointContext.SPProductNumberKey];
             if (string.IsNullOrEmpty(spProductNumber))
             {
                 return null;
@@ -469,13 +469,13 @@ namespace SharePoint.WebHooks.MVCWeb
                 throw new ArgumentNullException("httpContext");
             }
 
-            Uri spHostUrl = SharePointContext.GetSPHostUrl(httpContext.Request);
+            var spHostUrl = SharePointContext.GetSPHostUrl(httpContext.Request);
             if (spHostUrl == null)
             {
                 return null;
             }
 
-            SharePointContext spContext = LoadSharePointContext(httpContext);
+            var spContext = LoadSharePointContext(httpContext);
 
             if (spContext == null || !ValidateSharePointContext(spContext, httpContext))
             {
@@ -660,9 +660,9 @@ namespace SharePoint.WebHooks.MVCWeb
 
             try
             {
-                OAuth2AccessTokenResponse oAuth2AccessTokenResponse = tokenRenewalHandler();
+                var oAuth2AccessTokenResponse = tokenRenewalHandler();
 
-                DateTime expiresOn = oAuth2AccessTokenResponse.ExpiresOn;
+                var expiresOn = oAuth2AccessTokenResponse.ExpiresOn;
 
                 if ((expiresOn - oAuth2AccessTokenResponse.NotBefore) > AccessTokenLifetimeTolerance)
                 {
@@ -689,7 +689,7 @@ namespace SharePoint.WebHooks.MVCWeb
 
         protected override SharePointContext CreateSharePointContext(Uri spHostUrl, Uri spAppWebUrl, string spLanguage, string spClientTag, string spProductNumber, HttpRequestBase httpRequest)
         {
-            string contextTokenString = TokenHelper.GetContextTokenFromRequest(httpRequest);
+            var contextTokenString = TokenHelper.GetContextTokenFromRequest(httpRequest);
             if (string.IsNullOrEmpty(contextTokenString))
             {
                 return null;
@@ -714,14 +714,14 @@ namespace SharePoint.WebHooks.MVCWeb
 
         protected override bool ValidateSharePointContext(SharePointContext spContext, HttpContextBase httpContext)
         {
-            SharePointAcsContext spAcsContext = spContext as SharePointAcsContext;
+            var spAcsContext = spContext as SharePointAcsContext;
 
             if (spAcsContext != null)
             {
-                Uri spHostUrl = SharePointContext.GetSPHostUrl(httpContext.Request);
-                string contextToken = TokenHelper.GetContextTokenFromRequest(httpContext.Request);
-                HttpCookie spCacheKeyCookie = httpContext.Request.Cookies[SPCacheKeyKey];
-                string spCacheKey = spCacheKeyCookie != null ? spCacheKeyCookie.Value : null;
+                var spHostUrl = SharePointContext.GetSPHostUrl(httpContext.Request);
+                var contextToken = TokenHelper.GetContextTokenFromRequest(httpContext.Request);
+                var spCacheKeyCookie = httpContext.Request.Cookies[SPCacheKeyKey];
+                var spCacheKey = spCacheKeyCookie != null ? spCacheKeyCookie.Value : null;
 
                 return spHostUrl == spAcsContext.SPHostUrl &&
                        !string.IsNullOrEmpty(spAcsContext.CacheKey) &&
@@ -740,11 +740,11 @@ namespace SharePoint.WebHooks.MVCWeb
 
         protected override void SaveSharePointContext(SharePointContext spContext, HttpContextBase httpContext)
         {
-            SharePointAcsContext spAcsContext = spContext as SharePointAcsContext;
+            var spAcsContext = spContext as SharePointAcsContext;
 
             if (spAcsContext != null)
             {
-                HttpCookie spCacheKeyCookie = new HttpCookie(SPCacheKeyKey)
+                var spCacheKeyCookie = new HttpCookie(SPCacheKeyKey)
                 {
                     Value = spAcsContext.CacheKey,
                     Secure = true,
@@ -859,7 +859,7 @@ namespace SharePoint.WebHooks.MVCWeb
                 return;
             }
 
-            DateTime expiresOn = DateTime.UtcNow.Add(TokenHelper.HighTrustAccessTokenLifetime);
+            var expiresOn = DateTime.UtcNow.Add(TokenHelper.HighTrustAccessTokenLifetime);
 
             if (TokenHelper.HighTrustAccessTokenLifetime > AccessTokenLifetimeTolerance)
             {
@@ -881,7 +881,7 @@ namespace SharePoint.WebHooks.MVCWeb
 
         protected override SharePointContext CreateSharePointContext(Uri spHostUrl, Uri spAppWebUrl, string spLanguage, string spClientTag, string spProductNumber, HttpRequestBase httpRequest)
         {
-            WindowsIdentity logonUserIdentity = httpRequest.LogonUserIdentity;
+            var logonUserIdentity = httpRequest.LogonUserIdentity;
             if (logonUserIdentity == null || !logonUserIdentity.IsAuthenticated || logonUserIdentity.IsGuest || logonUserIdentity.User == null)
             {
                 return null;
@@ -892,12 +892,12 @@ namespace SharePoint.WebHooks.MVCWeb
 
         protected override bool ValidateSharePointContext(SharePointContext spContext, HttpContextBase httpContext)
         {
-            SharePointHighTrustContext spHighTrustContext = spContext as SharePointHighTrustContext;
+            var spHighTrustContext = spContext as SharePointHighTrustContext;
 
             if (spHighTrustContext != null)
             {
-                Uri spHostUrl = SharePointContext.GetSPHostUrl(httpContext.Request);
-                WindowsIdentity logonUserIdentity = httpContext.Request.LogonUserIdentity;
+                var spHostUrl = SharePointContext.GetSPHostUrl(httpContext.Request);
+                var logonUserIdentity = httpContext.Request.LogonUserIdentity;
 
                 return spHostUrl == spHighTrustContext.SPHostUrl &&
                        logonUserIdentity != null &&

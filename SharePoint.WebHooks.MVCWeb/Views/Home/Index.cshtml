@@ -31,7 +31,7 @@
                     foreach (var webHook in Model.WebHooks)
                     {
                         var list = Model.Lists.Where(f => f.Id == new Guid(webHook.Resource)).FirstOrDefault();
-                        string listName = "";
+                        var listName = "";
                         if (list != null)
                         {
                             listName = String.Format("{0} - {1}", list.Title, webHook.Resource);

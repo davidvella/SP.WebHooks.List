@@ -65,7 +65,7 @@ namespace SharePoint.WebHooks.MVCWeb
         public static string GetContextTokenFromRequest(HttpRequestBase request)
         {
             string[] paramNames = { "AppContext", "AppContextToken", "AccessToken", "SPAppToken" };
-            foreach (string paramName in paramNames)
+            foreach (var paramName in paramNames)
             {
                 if (!string.IsNullOrEmpty(request.Form[paramName]))
                 {
@@ -95,13 +95,13 @@ namespace SharePoint.WebHooks.MVCWeb
         /// <returns>A JsonWebSecurityToken based on the context token.</returns>
         public static SharePointContextToken ReadAndValidateContextToken(string contextTokenString, string appHostName = null)
         {
-            JsonWebSecurityTokenHandler tokenHandler = CreateJsonWebSecurityTokenHandler();
-            SecurityToken securityToken = tokenHandler.ReadToken(contextTokenString);
-            JsonWebSecurityToken jsonToken = securityToken as JsonWebSecurityToken;
-            SharePointContextToken token = SharePointContextToken.Create(jsonToken);
+            var tokenHandler = CreateJsonWebSecurityTokenHandler();
+            var securityToken = tokenHandler.ReadToken(contextTokenString);
+            var jsonToken = securityToken as JsonWebSecurityToken;
+            var token = SharePointContextToken.Create(jsonToken);
 
-            string stsAuthority = (new Uri(token.SecurityTokenServiceUri)).Authority;
-            int firstDot = stsAuthority.IndexOf('.');
+            var stsAuthority = (new Uri(token.SecurityTokenServiceUri)).Authority;
+            var firstDot = stsAuthority.IndexOf('.');
 
             GlobalEndPointPrefix = stsAuthority.Substring(0, firstDot);
             AcsHostUrl = stsAuthority.Substring(firstDot + 1);
@@ -122,11 +122,11 @@ namespace SharePoint.WebHooks.MVCWeb
                 acceptableAudiences = new[] { appHostName };
             }
 
-            bool validationSuccessful = false;
-            string realm = Realm ?? token.Realm;
+            var validationSuccessful = false;
+            var realm = Realm ?? token.Realm;
             foreach (var audience in acceptableAudiences)
             {
-                string principal = GetFormattedPrincipal(ClientId, audience, realm);
+                var principal = GetFormattedPrincipal(ClientId, audience, realm);
                 if (StringComparer.OrdinalIgnoreCase.Equals(token.Audience, principal))
                 {
                     validationSuccessful = true;
@@ -153,17 +153,17 @@ namespace SharePoint.WebHooks.MVCWeb
         /// <returns>An access token with an audience matching the context token's source</returns>
         public static OAuth2AccessTokenResponse GetAccessToken(SharePointContextToken contextToken, string targetHost)
         {
-            string targetPrincipalName = contextToken.TargetPrincipalName;
+            var targetPrincipalName = contextToken.TargetPrincipalName;
 
             // Extract the refreshToken from the context token
-            string refreshToken = contextToken.RefreshToken;
+            var refreshToken = contextToken.RefreshToken;
 
             if (String.IsNullOrEmpty(refreshToken))
             {
                 return null;
             }
 
-            string targetRealm = Realm ?? contextToken.Realm;
+            var targetRealm = Realm ?? contextToken.Realm;
 
             return GetAccessToken(refreshToken,
                                   targetPrincipalName,
@@ -194,11 +194,11 @@ namespace SharePoint.WebHooks.MVCWeb
                 targetRealm = Realm;
             }
 
-            string resource = GetFormattedPrincipal(targetPrincipalName, targetHost, targetRealm);
-            string clientId = GetFormattedPrincipal(ClientId, null, targetRealm);
+            var resource = GetFormattedPrincipal(targetPrincipalName, targetHost, targetRealm);
+            var clientId = GetFormattedPrincipal(ClientId, null, targetRealm);
 
             // Create request for token. The RedirectUri is null here.  This will fail if redirect uri is registered
-            OAuth2AccessTokenRequest oauth2Request =
+            var oauth2Request =
                 OAuth2MessageFactory.CreateAccessTokenRequestWithAuthorizationCode(
                     clientId,
                     ClientSecret,
@@ -207,7 +207,7 @@ namespace SharePoint.WebHooks.MVCWeb
                     resource);
 
             // Get token
-            OAuth2S2SClient client = new OAuth2S2SClient();
+            var client = new OAuth2S2SClient();
             OAuth2AccessTokenResponse oauth2Response;
             try
             {
@@ -236,9 +236,9 @@ namespace SharePoint.WebHooks.MVCWeb
             }
             catch (WebException wex)
             {
-                using (StreamReader sr = new StreamReader(wex.Response.GetResponseStream()))
+                using (var sr = new StreamReader(wex.Response.GetResponseStream()))
                 {
-                    string responseText = sr.ReadToEnd();
+                    var responseText = sr.ReadToEnd();
                     throw new WebException(wex.Message + " - " + responseText, wex);
                 }
             }
@@ -267,13 +267,13 @@ namespace SharePoint.WebHooks.MVCWeb
                 targetRealm = Realm;
             }
 
-            string resource = GetFormattedPrincipal(targetPrincipalName, targetHost, targetRealm);
-            string clientId = GetFormattedPrincipal(ClientId, null, targetRealm);
+            var resource = GetFormattedPrincipal(targetPrincipalName, targetHost, targetRealm);
+            var clientId = GetFormattedPrincipal(ClientId, null, targetRealm);
 
-            OAuth2AccessTokenRequest oauth2Request = OAuth2MessageFactory.CreateAccessTokenRequestWithRefreshToken(clientId, ClientSecret, refreshToken, resource);
+            var oauth2Request = OAuth2MessageFactory.CreateAccessTokenRequestWithRefreshToken(clientId, ClientSecret, refreshToken, resource);
 
             // Get token
-            OAuth2S2SClient client = new OAuth2S2SClient();
+            var client = new OAuth2S2SClient();
             OAuth2AccessTokenResponse oauth2Response;
             try
             {
@@ -295,9 +295,9 @@ namespace SharePoint.WebHooks.MVCWeb
             }
             catch (WebException wex)
             {
-                using (StreamReader sr = new StreamReader(wex.Response.GetResponseStream()))
+                using (var sr = new StreamReader(wex.Response.GetResponseStream()))
                 {
-                    string responseText = sr.ReadToEnd();
+                    var responseText = sr.ReadToEnd();
                     throw new WebException(wex.Message + " - " + responseText, wex);
                 }
             }
@@ -325,14 +325,14 @@ namespace SharePoint.WebHooks.MVCWeb
                 targetRealm = Realm;
             }
 
-            string resource = GetFormattedPrincipal(targetPrincipalName, targetHost, targetRealm);
-            string clientId = GetFormattedPrincipal(ClientId, HostedAppHostName, targetRealm);
+            var resource = GetFormattedPrincipal(targetPrincipalName, targetHost, targetRealm);
+            var clientId = GetFormattedPrincipal(ClientId, HostedAppHostName, targetRealm);
 
-            OAuth2AccessTokenRequest oauth2Request = OAuth2MessageFactory.CreateAccessTokenRequestWithClientCredentials(clientId, ClientSecret, resource);
+            var oauth2Request = OAuth2MessageFactory.CreateAccessTokenRequestWithClientCredentials(clientId, ClientSecret, resource);
             oauth2Request.Resource = resource;
 
             // Get token
-            OAuth2S2SClient client = new OAuth2S2SClient();
+            var client = new OAuth2S2SClient();
 
             OAuth2AccessTokenResponse oauth2Response;
             try
@@ -357,9 +357,9 @@ namespace SharePoint.WebHooks.MVCWeb
             }
             catch (WebException wex)
             {
-                using (StreamReader sr = new StreamReader(wex.Response.GetResponseStream()))
+                using (var sr = new StreamReader(wex.Response.GetResponseStream()))
                 {
-                    string responseText = sr.ReadToEnd();
+                    var responseText = sr.ReadToEnd();
                     throw new WebException(wex.Message + " - " + responseText, wex);
                 }
             }
@@ -413,7 +413,7 @@ namespace SharePoint.WebHooks.MVCWeb
                 return null;
             }
 
-            Uri sharepointUrl = useAppWeb ? properties.AppEventProperties.AppWebFullUrl : properties.AppEventProperties.HostWebFullUrl;
+            var sharepointUrl = useAppWeb ? properties.AppEventProperties.AppWebFullUrl : properties.AppEventProperties.HostWebFullUrl;
             if (IsHighTrustApp())
             {
                 return GetS2SClientContextWithWindowsIdentity(sharepointUrl, null);
@@ -455,9 +455,9 @@ namespace SharePoint.WebHooks.MVCWeb
             string targetRealm,
             Uri redirectUri)
         {
-            Uri targetUri = new Uri(targetUrl);
+            var targetUri = new Uri(targetUrl);
 
-            string accessToken =
+            var accessToken =
                 GetAccessToken(authorizationCode, targetPrincipalName, targetUri.Authority, targetRealm, redirectUri).AccessToken;
 
             return GetClientContextWithAccessToken(targetUrl, accessToken);
@@ -471,7 +471,7 @@ namespace SharePoint.WebHooks.MVCWeb
         /// <returns>A ClientContext ready to call targetUrl with the specified access token</returns>
         public static ClientContext GetClientContextWithAccessToken(string targetUrl, string accessToken)
         {
-            ClientContext clientContext = new ClientContext(targetUrl);
+            var clientContext = new ClientContext(targetUrl);
 
             clientContext.AuthenticationMode = ClientAuthenticationMode.Anonymous;
             clientContext.FormDigestHandlingEnabled = false;
@@ -499,11 +499,11 @@ namespace SharePoint.WebHooks.MVCWeb
             string contextTokenString,
             string appHostUrl)
         {
-            SharePointContextToken contextToken = ReadAndValidateContextToken(contextTokenString, appHostUrl);
+            var contextToken = ReadAndValidateContextToken(contextTokenString, appHostUrl);
 
-            Uri targetUri = new Uri(targetUrl);
+            var targetUri = new Uri(targetUrl);
 
-            string accessToken = GetAccessToken(contextToken, targetUri.Authority).AccessToken;
+            var accessToken = GetAccessToken(contextToken, targetUri.Authority).AccessToken;
 
             return GetClientContextWithAccessToken(targetUrl, accessToken);
         }
@@ -575,9 +575,9 @@ namespace SharePoint.WebHooks.MVCWeb
             Uri targetApplicationUri,
             WindowsIdentity identity)
         {
-            string realm = string.IsNullOrEmpty(Realm) ? GetRealmFromTargetUrl(targetApplicationUri) : Realm;
+            var realm = string.IsNullOrEmpty(Realm) ? GetRealmFromTargetUrl(targetApplicationUri) : Realm;
 
-            JsonWebTokenClaim[] claims = identity != null ? GetClaimsWithWindowsIdentity(identity) : null;
+            var claims = identity != null ? GetClaimsWithWindowsIdentity(identity) : null;
 
             return GetS2SAccessTokenWithClaims(targetApplicationUri.Authority, realm, claims);
         }
@@ -595,11 +595,11 @@ namespace SharePoint.WebHooks.MVCWeb
             Uri targetApplicationUri,
             WindowsIdentity identity)
         {
-            string realm = string.IsNullOrEmpty(Realm) ? GetRealmFromTargetUrl(targetApplicationUri) : Realm;
+            var realm = string.IsNullOrEmpty(Realm) ? GetRealmFromTargetUrl(targetApplicationUri) : Realm;
 
-            JsonWebTokenClaim[] claims = identity != null ? GetClaimsWithWindowsIdentity(identity) : null;
+            var claims = identity != null ? GetClaimsWithWindowsIdentity(identity) : null;
 
-            string accessToken = GetS2SAccessTokenWithClaims(targetApplicationUri.Authority, realm, claims);
+            var accessToken = GetS2SAccessTokenWithClaims(targetApplicationUri.Authority, realm, claims);
 
             return GetClientContextWithAccessToken(targetApplicationUri.ToString(), accessToken);
         }
@@ -611,7 +611,7 @@ namespace SharePoint.WebHooks.MVCWeb
         /// <returns>String representation of the realm GUID</returns>
         public static string GetRealmFromTargetUrl(Uri targetApplicationUri)
         {
-            WebRequest request = WebRequest.Create(targetApplicationUri + "/_vti_bin/client.svc");
+            var request = WebRequest.Create(targetApplicationUri + "/_vti_bin/client.svc");
             request.Headers.Add("Authorization: Bearer ");
 
             try
@@ -627,24 +627,24 @@ namespace SharePoint.WebHooks.MVCWeb
                     return null;
                 }
 
-                string bearerResponseHeader = e.Response.Headers["WWW-Authenticate"];
+                var bearerResponseHeader = e.Response.Headers["WWW-Authenticate"];
                 if (string.IsNullOrEmpty(bearerResponseHeader))
                 {
                     return null;
                 }
 
                 const string bearer = "Bearer realm=\"";
-                int bearerIndex = bearerResponseHeader.IndexOf(bearer, StringComparison.Ordinal);
+                var bearerIndex = bearerResponseHeader.IndexOf(bearer, StringComparison.Ordinal);
                 if (bearerIndex < 0)
                 {
                     return null;
                 }
 
-                int realmIndex = bearerIndex + bearer.Length;
+                var realmIndex = bearerIndex + bearer.Length;
 
                 if (bearerResponseHeader.Length >= realmIndex + 36)
                 {
-                    string targetRealm = bearerResponseHeader.Substring(realmIndex, 36);
+                    var targetRealm = bearerResponseHeader.Substring(realmIndex, 36);
 
                     Guid realmGuid;
 
@@ -729,15 +729,15 @@ namespace SharePoint.WebHooks.MVCWeb
 
         private static ClientContext CreateAcsClientContextForUrl(SPRemoteEventProperties properties, Uri sharepointUrl)
         {
-            string contextTokenString = properties.ContextToken;
+            var contextTokenString = properties.ContextToken;
 
             if (String.IsNullOrEmpty(contextTokenString))
             {
                 return null;
             }
 
-            SharePointContextToken contextToken = ReadAndValidateContextToken(contextTokenString, OperationContext.Current.IncomingMessageHeaders.To.Host);
-            string accessToken = GetAccessToken(contextToken, sharepointUrl.Authority).AccessToken;
+            var contextToken = ReadAndValidateContextToken(contextTokenString, OperationContext.Current.IncomingMessageHeaders.To.Host);
+            var accessToken = GetAccessToken(contextToken, sharepointUrl.Authority).AccessToken;
 
             return GetClientContextWithAccessToken(sharepointUrl.ToString(), accessToken);
         }
@@ -769,27 +769,27 @@ namespace SharePoint.WebHooks.MVCWeb
 
         private static JsonWebSecurityTokenHandler CreateJsonWebSecurityTokenHandler()
         {
-            JsonWebSecurityTokenHandler handler = new JsonWebSecurityTokenHandler();
+            var handler = new JsonWebSecurityTokenHandler();
             handler.Configuration = new SecurityTokenHandlerConfiguration();
             handler.Configuration.AudienceRestriction = new AudienceRestriction(AudienceUriMode.Never);
             handler.Configuration.CertificateValidator = X509CertificateValidator.None;
 
-            List<byte[]> securityKeys = new List<byte[]>();
+            var securityKeys = new List<byte[]>();
             securityKeys.Add(Convert.FromBase64String(ClientSecret));
             if (!string.IsNullOrEmpty(SecondaryClientSecret))
             {
                 securityKeys.Add(Convert.FromBase64String(SecondaryClientSecret));
             }
 
-            List<SecurityToken> securityTokens = new List<SecurityToken>();
+            var securityTokens = new List<SecurityToken>();
             securityTokens.Add(new MultipleSymmetricKeySecurityToken(securityKeys));
 
             handler.Configuration.IssuerTokenResolver =
                 SecurityTokenResolver.CreateDefaultSecurityTokenResolver(
                 new ReadOnlyCollection<SecurityToken>(securityTokens),
                 false);
-            SymmetricKeyIssuerNameRegistry issuerNameRegistry = new SymmetricKeyIssuerNameRegistry();
-            foreach (byte[] securitykey in securityKeys)
+            var issuerNameRegistry = new SymmetricKeyIssuerNameRegistry();
+            foreach (var securitykey in securityKeys)
             {
                 issuerNameRegistry.AddTrustedIssuer(securitykey, GetAcsPrincipalName(ServiceNamespace));
             }
@@ -816,7 +816,7 @@ namespace SharePoint.WebHooks.MVCWeb
 
         private static JsonWebTokenClaim[] GetClaimsWithWindowsIdentity(WindowsIdentity identity)
         {
-            JsonWebTokenClaim[] claims = new JsonWebTokenClaim[]
+            var claims = new JsonWebTokenClaim[]
             {
                 new JsonWebTokenClaim(NameIdentifierClaimType, identity.User.Value.ToLower()),
                 new JsonWebTokenClaim("nii", "urn:office:idp:activedirectory")
@@ -842,11 +842,11 @@ namespace SharePoint.WebHooks.MVCWeb
 
             #region Actor token
 
-            string issuer = string.IsNullOrEmpty(sourceRealm) ? issuerApplication : string.Format("{0}@{1}", issuerApplication, sourceRealm);
-            string nameid = string.IsNullOrEmpty(sourceRealm) ? sourceApplication : string.Format("{0}@{1}", sourceApplication, sourceRealm);
-            string audience = string.Format("{0}/{1}@{2}", targetApplication, targetApplicationHostName, targetRealm);
+            var issuer = string.IsNullOrEmpty(sourceRealm) ? issuerApplication : string.Format("{0}@{1}", issuerApplication, sourceRealm);
+            var nameid = string.IsNullOrEmpty(sourceRealm) ? sourceApplication : string.Format("{0}@{1}", sourceApplication, sourceRealm);
+            var audience = string.Format("{0}/{1}@{2}", targetApplication, targetApplicationHostName, targetRealm);
 
-            List<JsonWebTokenClaim> actorClaims = new List<JsonWebTokenClaim>();
+            var actorClaims = new List<JsonWebTokenClaim>();
             actorClaims.Add(new JsonWebTokenClaim(JsonWebTokenConstants.ReservedClaims.NameIdentifier, nameid));
             if (trustedForDelegation && !appOnly)
             {
@@ -854,7 +854,7 @@ namespace SharePoint.WebHooks.MVCWeb
             }
 
             // Create token
-            JsonWebSecurityToken actorToken = new JsonWebSecurityToken(
+            var actorToken = new JsonWebSecurityToken(
                 issuer: issuer,
                 audience: audience,
                 validFrom: DateTime.UtcNow,
@@ -862,7 +862,7 @@ namespace SharePoint.WebHooks.MVCWeb
                 signingCredentials: SigningCredentials,
                 claims: actorClaims);
 
-            string actorTokenString = new JsonWebSecurityTokenHandler().WriteTokenAsString(actorToken);
+            var actorTokenString = new JsonWebSecurityTokenHandler().WriteTokenAsString(actorToken);
 
             if (appOnly)
             {
@@ -874,17 +874,17 @@ namespace SharePoint.WebHooks.MVCWeb
 
             #region Outer token
 
-            List<JsonWebTokenClaim> outerClaims = null == claims ? new List<JsonWebTokenClaim>() : new List<JsonWebTokenClaim>(claims);
+            var outerClaims = null == claims ? new List<JsonWebTokenClaim>() : new List<JsonWebTokenClaim>(claims);
             outerClaims.Add(new JsonWebTokenClaim(ActorTokenClaimType, actorTokenString));
 
-            JsonWebSecurityToken jsonToken = new JsonWebSecurityToken(
+            var jsonToken = new JsonWebSecurityToken(
                 nameid, // outer token issuer should match actor token nameid
                 audience,
                 DateTime.UtcNow,
                 DateTime.UtcNow.Add(HighTrustAccessTokenLifetime),
                 outerClaims);
 
-            string accessToken = new JsonWebSecurityTokenHandler().WriteTokenAsString(jsonToken);
+            var accessToken = new JsonWebSecurityTokenHandler().WriteTokenAsString(jsonToken);
 
             #endregion Outer token
 
@@ -901,11 +901,11 @@ namespace SharePoint.WebHooks.MVCWeb
         {
             public static X509Certificate2 GetAcsSigningCert(string realm)
             {
-                JsonMetadataDocument document = GetMetadataDocument(realm);
+                var document = GetMetadataDocument(realm);
 
                 if (null != document.keys && document.keys.Count > 0)
                 {
-                    JsonKey signingKey = document.keys[0];
+                    var signingKey = document.keys[0];
 
                     if (null != signingKey && null != signingKey.keyValue)
                     {
@@ -918,9 +918,9 @@ namespace SharePoint.WebHooks.MVCWeb
 
             public static string GetDelegationServiceUrl(string realm)
             {
-                JsonMetadataDocument document = GetMetadataDocument(realm);
+                var document = GetMetadataDocument(realm);
 
-                JsonEndpoint delegationEndpoint = document.endpoints.SingleOrDefault(e => e.protocol == DelegationIssuance);
+                var delegationEndpoint = document.endpoints.SingleOrDefault(e => e.protocol == DelegationIssuance);
 
                 if (null != delegationEndpoint)
                 {
@@ -931,19 +931,19 @@ namespace SharePoint.WebHooks.MVCWeb
 
             private static JsonMetadataDocument GetMetadataDocument(string realm)
             {
-                string acsMetadataEndpointUrlWithRealm = String.Format(CultureInfo.InvariantCulture, "{0}?realm={1}",
+                var acsMetadataEndpointUrlWithRealm = String.Format(CultureInfo.InvariantCulture, "{0}?realm={1}",
                                                                        GetAcsMetadataEndpointUrl(),
                                                                        realm);
                 byte[] acsMetadata;
-                using (WebClient webClient = new WebClient())
+                using (var webClient = new WebClient())
                 {
 
                     acsMetadata = webClient.DownloadData(acsMetadataEndpointUrlWithRealm);
                 }
-                string jsonResponseString = Encoding.UTF8.GetString(acsMetadata);
+                var jsonResponseString = Encoding.UTF8.GetString(acsMetadata);
 
-                JavaScriptSerializer serializer = new JavaScriptSerializer();
-                JsonMetadataDocument document = serializer.Deserialize<JsonMetadataDocument>(jsonResponseString);
+                var serializer = new JavaScriptSerializer();
+                var document = serializer.Deserialize<JsonMetadataDocument>(jsonResponseString);
 
                 if (null == document)
                 {
@@ -955,9 +955,9 @@ namespace SharePoint.WebHooks.MVCWeb
 
             public static string GetStsUrl(string realm)
             {
-                JsonMetadataDocument document = GetMetadataDocument(realm);
+                var document = GetMetadataDocument(realm);
 
-                JsonEndpoint s2sEndpoint = document.endpoints.SingleOrDefault(e => e.protocol == S2SProtocol);
+                var s2sEndpoint = document.endpoints.SingleOrDefault(e => e.protocol == S2SProtocol);
 
                 if (null != s2sEndpoint)
                 {
@@ -1037,7 +1037,7 @@ namespace SharePoint.WebHooks.MVCWeb
         {
             get
             {
-                string appctxsender = GetClaimValue(this, "appctxsender");
+                var appctxsender = GetClaimValue(this, "appctxsender");
 
                 if (appctxsender == null)
                 {
@@ -1066,15 +1066,15 @@ namespace SharePoint.WebHooks.MVCWeb
         {
             get
             {
-                string appctx = GetClaimValue(this, "appctx");
+                var appctx = GetClaimValue(this, "appctx");
                 if (appctx == null)
                 {
                     return null;
                 }
 
-                ClientContext ctx = new ClientContext("http://tempuri.org");
-                Dictionary<string, object> dict = (Dictionary<string, object>)ctx.ParseObjectFromJsonString(appctx);
-                string cacheKey = (string)dict["CacheKey"];
+                var ctx = new ClientContext("http://tempuri.org");
+                var dict = (Dictionary<string, object>)ctx.ParseObjectFromJsonString(appctx);
+                var cacheKey = (string)dict["CacheKey"];
 
                 return cacheKey;
             }
@@ -1087,15 +1087,15 @@ namespace SharePoint.WebHooks.MVCWeb
         {
             get
             {
-                string appctx = GetClaimValue(this, "appctx");
+                var appctx = GetClaimValue(this, "appctx");
                 if (appctx == null)
                 {
                     return null;
                 }
 
-                ClientContext ctx = new ClientContext("http://tempuri.org");
-                Dictionary<string, object> dict = (Dictionary<string, object>)ctx.ParseObjectFromJsonString(appctx);
-                string securityTokenServiceUri = (string)dict["SecurityTokenServiceUri"];
+                var ctx = new ClientContext("http://tempuri.org");
+                var dict = (Dictionary<string, object>)ctx.ParseObjectFromJsonString(appctx);
+                var securityTokenServiceUri = (string)dict["SecurityTokenServiceUri"];
 
                 return securityTokenServiceUri;
             }
@@ -1108,13 +1108,13 @@ namespace SharePoint.WebHooks.MVCWeb
         {
             get
             {
-                string aud = Audience;
+                var aud = Audience;
                 if (aud == null)
                 {
                     return null;
                 }
 
-                string tokenRealm = aud.Substring(aud.IndexOf('@') + 1);
+                var tokenRealm = aud.Substring(aud.IndexOf('@') + 1);
 
                 return tokenRealm;
             }
@@ -1127,7 +1127,7 @@ namespace SharePoint.WebHooks.MVCWeb
                 throw new ArgumentNullException("token");
             }
 
-            foreach (JsonWebTokenClaim claim in token.Claims)
+            foreach (var claim in token.Claims)
             {
                 if (StringComparer.Ordinal.Equals(claim.ClaimType, claimType))
                 {
@@ -1171,7 +1171,7 @@ namespace SharePoint.WebHooks.MVCWeb
                 throw new ArgumentException("Value cannot be a null or empty string.", "tokenId");
             }
 
-            foreach (byte[] key in keys)
+            foreach (var key in keys)
             {
                 if (key.Length <= 0)
                 {
@@ -1255,8 +1255,8 @@ namespace SharePoint.WebHooks.MVCWeb
 
         private List<SecurityKey> CreateSymmetricSecurityKeys(IEnumerable<byte[]> keys)
         {
-            List<SecurityKey> symmetricKeys = new List<SecurityKey>();
-            foreach (byte[] key in keys)
+            var symmetricKeys = new List<SecurityKey>();
+            foreach (var key in keys)
             {
                 symmetricKeys.Add(new InMemorySymmetricSecurityKey(key));
             }

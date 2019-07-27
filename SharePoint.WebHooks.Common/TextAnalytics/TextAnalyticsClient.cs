@@ -39,7 +39,7 @@ namespace SharePoint.WebHooks.Common.TextAnalytics
 
             // Get language of inputs
             var languageInput = new List<LanguageInput>();
-            int i = 0;
+            var i = 0;
             foreach (var s in sentences)
             {
                 if (s.Length > 10) languageInput.Add(new LanguageInput(id: i.ToString(), text: s));
@@ -68,16 +68,15 @@ namespace SharePoint.WebHooks.Common.TextAnalytics
             // lastly, remove extra whitespace
             text = Regex.Replace(text, @"( +)", " ");
 
-            List<string> sentences = new List<string>();
-            var RegEx_SentenceDelimiter = new Regex(@"(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?)\s");
-            sentences = RegEx_SentenceDelimiter.Split(text).ToList();
+            var regExSentenceDelimiter = new Regex(@"(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?)\s");
+            var sentences = regExSentenceDelimiter.Split(text).ToList();
 
             // figure out, which sentence length we're using based on set accuracylevel. The default value is 5120 (set by the API)
-            int limit = 2560;
+            const int limit = 2560;
 
-            List<string> finalizedSentences = new List<string>();
+            var finalizedSentences = new List<string>();
 
-            string sentenceCandidate = "";
+            var sentenceCandidate = "";
             foreach (var sentence in sentences)
             {
                 // SANITIZE AND SPLIT

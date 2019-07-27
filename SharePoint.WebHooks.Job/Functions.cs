@@ -16,8 +16,8 @@ namespace SharePoint.WebHooks.Job
         // on an Azure Queue called queue.
         public static void ProcessQueueMessage([QueueTrigger(ChangeManager.StorageQueueName)] NotificationModel notification, TextWriter log)
         {
-            log.WriteLine(String.Format("Processing subscription {0} for site {1}", notification.SubscriptionId, notification.SiteUrl));
-            ChangeManager changeManager = new ChangeManager();
+            log.WriteLine($"Processing subscription {notification.SubscriptionId} for site {notification.SiteUrl}");
+            var changeManager = new ChangeManager();
             changeManager.ProcessNotification(notification);
         }
     }

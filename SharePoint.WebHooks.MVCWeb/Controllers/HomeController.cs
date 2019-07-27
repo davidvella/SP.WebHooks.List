@@ -43,11 +43,11 @@ namespace SharePoint.WebHooks.MVCWeb.Controllers
                     cc.Load(lists, l => l.Include(p => p.Title, p => p.Id, p => p.Hidden));
                     cc.ExecuteQueryRetry();
 
-                    WebHookManager webHookManager = new WebHookManager();
+                    var webHookManager = new WebHookManager();
 
                     // Grab the current lists
-                    List<SharePointList> modelLists = new List<SharePointList>();
-                    List<SubscriptionModel> webHooks = new List<SubscriptionModel>();
+                    var modelLists = new List<SharePointList>();
+                    var webHooks = new List<SubscriptionModel>();
 
                     foreach (var list in lists)
                     {
@@ -70,7 +70,7 @@ namespace SharePoint.WebHooks.MVCWeb.Controllers
                     }
 
                     // Prepare the data model
-                    SharePointSiteModel sharePointSiteModel = new SharePointSiteModel();
+                    var sharePointSiteModel = new SharePointSiteModel();
                     sharePointSiteModel.Lists = modelLists;
                     sharePointSiteModel.WebHooks = webHooks;
                     sharePointSiteModel.SelectedSharePointList = modelLists[0].Id;
@@ -101,17 +101,17 @@ namespace SharePoint.WebHooks.MVCWeb.Controllers
                     // Hookup event to capture access token
                     cc.ExecutingWebRequest += Cc_ExecutingWebRequest;
 
-                    ListCollection lists = cc.Web.Lists;
-                    Guid listId = new Guid(selectedSharePointList);
-                    IEnumerable<List> sharePointLists = cc.LoadQuery<List>(lists.Where(lst => lst.Id == listId));
+                    var lists = cc.Web.Lists;
+                    var listId = new Guid(selectedSharePointList);
+                    var sharePointLists = cc.LoadQuery<List>(lists.Where(lst => lst.Id == listId));
                     cc.Load(cc.Web, w => w.Url);
                     cc.ExecuteQueryRetry();
 
-                    WebHookManager webHookManager = new WebHookManager();
+                    var webHookManager = new WebHookManager();
                     var res = await webHookManager.AddListWebHookAsync(cc.Web.Url, listId.ToString(), CloudConfigurationManager.GetSetting("WebHookEndPoint"), this.accessToken);
 
                     // persist the latest changetoken of the list when we create a new webhook. This allows use to only grab the changes as of web hook creation when the first notification comes in
-                    using (SharePointWebHooks dbContext = new SharePointWebHooks())
+                    using (var dbContext = new SharePointWebHooks())
                     {
                         dbContext.ListWebHooks.Add(new ListWebHooks()
                         {
@@ -148,11 +148,11 @@ namespace SharePoint.WebHooks.MVCWeb.Controllers
                     cc.Load(cc.Web, w => w.Url);
                     cc.ExecuteQueryRetry();
 
-                    WebHookManager webHookManager = new WebHookManager();
+                    var webHookManager = new WebHookManager();
                     // delete the web hook
                     if (await webHookManager.DeleteListWebHookAsync(cc.Web.Url, listId, id, this.accessToken))
                     {
-                        using (SharePointWebHooks dbContext = new SharePointWebHooks())
+                        using (var dbContext = new SharePointWebHooks())
                         {
                             var webHookRow = await dbContext.ListWebHooks.FindAsync(new Guid(id));
                             if (webHookRow != null)
@@ -165,7 +165,7 @@ namespace SharePoint.WebHooks.MVCWeb.Controllers
                 }
             }
 
-            return RedirectToAction("Index", "Home", new { SPHostUrl = Request.QueryString["SPHostUrl"] });
+            return RedirectToAction($"Index", $"Home", new { SPHostUrl = Request.QueryString[$"SPHostUrl"] });
         }
 
         private void Cc_ExecutingWebRequest(object sender, WebRequestEventArgs e)

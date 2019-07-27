@@ -1,6 +1,6 @@
 ﻿using Microsoft.Azure;
 using Microsoft.SharePoint.Client;
-using Microsoft.WindowsAzure;
+using Microsoft.SharePoint.Client.Taxonomy;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Queue;
 using Newtonsoft.Json;
@@ -12,9 +12,7 @@ using SharePoint.WebHooks.Common.TextAnalytics;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace SharePoint.WebHooks.Common
@@ -26,7 +24,7 @@ namespace SharePoint.WebHooks.Common
     {
         #region Constants and variables
         public const string StorageQueueName = "sharepointlistwebhookevent";
-        private string accessToken = null;
+        private string _accessToken = null;
         #endregion
 
         #region Async processing...add item to queue
@@ -37,12 +35,11 @@ namespace SharePoint.WebHooks.Common
         /// <param name="notification">Notification message to add</param>
         public void AddNotificationToQueue(string storageConnectionString, NotificationModel notification)
         {
-            CloudStorageAccount storageAccount =CloudStorageAccount.Parse(storageConnectionString);
+            var storageAccount =CloudStorageAccount.Parse(storageConnectionString);
 
-            var test = new TextAnalyticsClient();
             // Get queue... create if does not exist.
-            CloudQueueClient queueClient = storageAccount.CreateCloudQueueClient();
-            CloudQueue queue = queueClient.GetQueueReference(ChangeManager.StorageQueueName);
+            var queueClient = storageAccount.CreateCloudQueueClient();
+            var queue = queueClient.GetQueueReference(ChangeManager.StorageQueueName);
             queue.CreateIfNotExists();
 
             // add message to the queue
@@ -61,34 +58,27 @@ namespace SharePoint.WebHooks.Common
             try
             {
                 #region Setup an app-only client context
-                AuthenticationManager am = new AuthenticationManager();
+                var am = new AuthenticationManager();
 
-                string url = String.Format("https://{0}{1}", CloudConfigurationManager.GetSetting("TenantName"), notification.SiteUrl);
-                string realm = TokenHelper.GetRealmFromTargetUrl(new Uri(url));
-                string clientId = CloudConfigurationManager.GetSetting("ClientId");
-                string clientSecret = CloudConfigurationManager.GetSetting("ClientSecret");
+                var url = $"https://{CloudConfigurationManager.GetSetting("TenantName")}{notification.SiteUrl}";
+                var realm = TokenHelper.GetRealmFromTargetUrl(new Uri(url));
+                var clientId = CloudConfigurationManager.GetSetting("ClientId");
+                var clientSecret = CloudConfigurationManager.GetSetting("ClientSecret");
 
-                if (new Uri(url).DnsSafeHost.Contains("spoppe.com"))
-                {
-                    cc = am.GetAppOnlyAuthenticatedContext(url, realm, clientId, clientSecret, acsHostUrl: "windows-ppe.net", globalEndPointPrefix: "login");
-                }
-                else
-                {
-                    cc = am.GetAppOnlyAuthenticatedContext(url, clientId, clientSecret);
-                }
+                cc = new Uri(url).DnsSafeHost.Contains("spoppe.com") ? am.GetAppOnlyAuthenticatedContext(url, realm, clientId, clientSecret, acsHostUrl: "windows-ppe.net", globalEndPointPrefix: "login") : am.GetAppOnlyAuthenticatedContext(url, clientId, clientSecret);
 
                 cc.ExecutingWebRequest += Cc_ExecutingWebRequest;
                 #endregion
 
                 #region Grab the list for which the web hook was triggered
-                ListCollection lists = cc.Web.Lists;
-                Guid listId = new Guid(notification.Resource);
-                IEnumerable<List> results = cc.LoadQuery<List>(lists.Where(lst => lst.Id == listId));
+                var lists = cc.Web.Lists;
+                var listId = new Guid(notification.Resource);
+                var results = cc.LoadQuery<List>(lists.Where(lst => lst.Id == listId));
                 cc.ExecuteQueryRetry();
-                List changeList = results.FirstOrDefault();
+                var changeList = results.FirstOrDefault();
                 if (changeList == null)
                 {
-                    // list has been deleted inbetween the event being fired and the event being processed
+                    // list has been deleted in between the event being fired and the event being processed
                     return;
                 }
                 #endregion
@@ -97,34 +87,45 @@ namespace SharePoint.WebHooks.Common
                 // grab the changes to the provided list using the GetChanges method 
                 // on the list. Only request Item changes as that's what's supported via
                 // the list web hooks
-                ChangeQuery changeQuery = new ChangeQuery(false, true);
-                changeQuery.Item = true;
-                changeQuery.FetchLimit = 1000; // Max value is 2000, default = 1000
+                var changeQuery = new ChangeQuery(false, true)
+                {
+                    Item = true,
+                    FetchLimit = 1000, // Max value is 2000, default = 1000
+                    DeleteObject = false,
+                    Add = true,
+                    Update = true,
+                    SystemUpdate = false
+                };
 
                 // grab last change token from database if possible
-                using (SharePointWebHooks dbContext = new SharePointWebHooks())
+                using (var dbContext = new SharePointWebHooks())
                 {
                     ChangeToken lastChangeToken = null;
-                    Guid id = new Guid(notification.SubscriptionId);
+                    var id = new Guid(notification.SubscriptionId);
 
                     var listWebHookRow = dbContext.ListWebHooks.Find(id);
                     if (listWebHookRow != null)
                     {
-                        lastChangeToken = new ChangeToken();
-                        lastChangeToken.StringValue = listWebHookRow.LastChangeToken;
+                        lastChangeToken = new ChangeToken
+                        {
+                            StringValue = listWebHookRow.LastChangeToken
+                        };
                     }
 
                     // Start pulling down the changes
-                    bool allChangesRead = false;
+                    var allChangesRead = false;
                     do
                     {
                         // should not occur anymore now that we record the starting change token at 
                         // subscription creation time, but it's a safety net
                         if (lastChangeToken == null)
                         {
-                            lastChangeToken = new ChangeToken();
+                            lastChangeToken = new ChangeToken
+                            {
+                                StringValue =
+                                    $"1;3;{notification.Resource};{DateTime.Now.AddMinutes(-5).ToUniversalTime().Ticks.ToString()};-1"
+                            };
                             // See https://blogs.technet.microsoft.com/stefan_gossner/2009/12/04/content-deployment-the-complete-guide-part-7-change-token-basics/
-                            lastChangeToken.StringValue = string.Format("1;3;{0};{1};-1", notification.Resource, DateTime.Now.AddMinutes(-5).ToUniversalTime().Ticks.ToString());
                         }
 
                         // Assign the change token to the query...this determines from what point in
@@ -138,19 +139,24 @@ namespace SharePoint.WebHooks.Common
 
                         if (changes.Count > 0)
                         {
-                            foreach (Change change in changes)
+                            foreach (var change in changes)
                             {
                                 lastChangeToken = change.ChangeToken;
 
-                                if (change is ChangeItem)
+                                if (!(change is ChangeItem)) continue;
+                                try
                                 {
                                     // do "work" with the found change
                                     DoWork(cc, changeList, change);
                                 }
+                                catch (Exception)
+                                {
+                                    // ignored
+                                }
                             }
 
                             // We potentially can have a lot of changes so be prepared to repeat the 
-                            // change query in batches of 'FetchLimit' untill we've received all changes
+                            // change query in batches of 'FetchLimit' until we've received all changes
                             if (changes.Count < changeQuery.FetchLimit)
                             {
                                 allChangesRead = true;
@@ -163,7 +169,7 @@ namespace SharePoint.WebHooks.Common
                         // Are we done?
                     } while (allChangesRead == false);
 
-                    // Persist the last used changetoken as we'll start from that one
+                    // Persist the last used change token as we'll start from that one
                     // when the next event hits our service
                     if (listWebHookRow != null)
                     {
@@ -190,25 +196,24 @@ namespace SharePoint.WebHooks.Common
                 #endregion
 
                 #region "Update" the web hook expiration date when needed
-                // Optionally add logic to "update" the expirationdatetime of the web hook
+                // Optionally add logic to "update" the expiration date time of the web hook
                 // If the web hook is about to expire within the coming 5 days then prolong it
-                if (notification.ExpirationDateTime.AddDays(-5) < DateTime.Now)
-                {
-                    WebHookManager webHookManager = new WebHookManager();
-                    Task<bool> updateResult = Task.WhenAny(
-                        webHookManager.UpdateListWebHookAsync(
-                            url,
-                            listId.ToString(),
-                            notification.SubscriptionId,
-                            CloudConfigurationManager.GetSetting("WebHookEndPoint"),
-                            DateTime.Now.AddMonths(3),
-                            this.accessToken)
-                        ).Result;
+                if (notification.ExpirationDateTime.AddDays(-5) >= DateTime.Now) return;
+                var webHookManager = new WebHookManager();
+                var updateResult = Task.WhenAny(
+                    webHookManager.UpdateListWebHookAsync(
+                        url,
+                        listId.ToString(),
+                        notification.SubscriptionId,
+                        CloudConfigurationManager.GetSetting("WebHookEndPoint"),
+                        DateTime.Now.AddMonths(3),
+                        this._accessToken)
+                ).Result;
 
-                    if (updateResult.Result == false)
-                    {
-                        throw new Exception(String.Format("The expiration date of web hook {0} with endpoint {1} could not be updated", notification.SubscriptionId, CloudConfigurationManager.GetSetting("WebHookEndPoint")));
-                    }
+                if (updateResult.Result == false)
+                {
+                    throw new Exception(
+                        $"The expiration date of web hook {notification.SubscriptionId} with endpoint {CloudConfigurationManager.GetSetting("WebHookEndPoint")} could not be updated");
                 }
                 #endregion
             }
@@ -219,10 +224,7 @@ namespace SharePoint.WebHooks.Common
             }
             finally
             {
-                if (cc != null)
-                {
-                    cc.Dispose();
-                }
+                cc?.Dispose();
             }
         }
 
@@ -234,11 +236,8 @@ namespace SharePoint.WebHooks.Common
         {
             // Get the list item from the Change List
             // Note that this is the ID of the item in the list, not a reference to its position.
-            ListItem targetListItem = changeList.GetItemById((change as ChangeItem).ItemId);
-                       
-            cc.Load(targetListItem);
+            var targetListItem = changeList.GetItemById(((ChangeItem) change).ItemId);
             cc.Load(targetListItem.File);
-            cc.ExecuteQueryRetry();
 
             // Get the File Binary Stream
             var streamResult = targetListItem.File.OpenBinaryStream();
@@ -246,29 +245,89 @@ namespace SharePoint.WebHooks.Common
 
             // Get Text Rendition
             var tika = new Tika();
-            string textFromStream = tika.ParseToString(streamResult.Value);
+            var textFromStream = tika.ParseToString(streamResult.Value);
 
             var client = new TextAnalyticsClient();
             var result = client.KeyPhrasesStringAsync(textFromStream).Result;
 
-            var keyPhrases = new List<string>();
-            foreach (var row in result.Documents)
-            {
-                foreach (var kp in row.KeyPhrases)
-                {
-                    keyPhrases.Add(kp);
-                }
-            }
+            // list of distinct key phrases
+            var keyPhrases = result.Documents.SelectMany(row => row.KeyPhrases).Distinct().ToList();
+            Trace.TraceInformation($"Key Phrases: {string.Join(",", keyPhrases)}");
 
-            targetListItem["KeyPhrases"] = string.Join(",", keyPhrases);
+            var field = changeList.Fields.GetByInternalNameOrTitle(CloudConfigurationManager.GetSetting("TaxonomyTermName"));
+            var txField = cc.CastTo<TaxonomyField>(field);
+
+            var matchedTerms = GetMatchedKeywordsFromMms(keyPhrases,
+                GetTermsFromMMS(cc, CloudConfigurationManager.GetSetting("TaxonomyTermSetId")));
+
+            Trace.TraceInformation($"Matched Terms: {string.Join(",", matchedTerms.Select(term => term.Name))}");
+
+            //Create Taxonomy Field Value
+            var taxonomyFieldValue = string.Join(";#", matchedTerms.Select(term => $"-1;#{term.Name}|{term.Id}"));
+
+            var tx = new TaxonomyFieldValueCollection(cc, taxonomyFieldValue, field);
+            txField.SetFieldValueByValueCollection(targetListItem, tx);
             targetListItem.SystemUpdate();
             cc.ExecuteQueryRetry();
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="cc"></param>
+        /// <param name="guidOfTermSet"></param>
+        /// <returns></returns>
+        private static TermCollection GetTermsFromMMS(ClientContext cc, string guidOfTermSet)
+        {
+            if (cc == null) throw new ArgumentNullException(nameof(cc));
+            if (guidOfTermSet == null) throw new ArgumentNullException(nameof(guidOfTermSet));
+            
+            //
+            // Get access to taxonomy CSOM.
+            //
+            var taxonomySession = TaxonomySession.GetTaxonomySession(cc);
+            var termStore = taxonomySession.GetDefaultSiteCollectionTermStore();
+            cc.Load(termStore,
+                store => store.Id,
+                store => store.Groups.Include(
+                    groupArg => groupArg.Id,
+                    groupArg => groupArg.Name
+                )
+            );
+            cc.ExecuteQuery();
+
+            //Requires you know the GUID of your Term Set, and the Name.
+            var termSet = termStore.GetTermSet(new Guid(guidOfTermSet));
+            var terms = termSet.GetAllTerms();
+            cc.Load(terms);
+            cc.Load(termSet);
+            cc.ExecuteQuery();
+
+            return terms;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="uniqueKeywords"></param>
+        /// <param name="allTermsFromTermSet"></param>
+        /// <returns></returns>
+        private static List<Term> GetMatchedKeywordsFromMms(IEnumerable<string> keywords, TermCollection allTermsFromTermSet)
+        {
+            var keywordsToLower = keywords.Select(word => word.ToLower()).ToList();
+            var matchedKeyWordsFromMms = new List<Term>();
+            foreach (var term in allTermsFromTermSet)
+            {
+                if (!keywordsToLower.Contains(term.Name.ToLower())) continue;
+                matchedKeyWordsFromMms.Add(term);
+            }
+            return matchedKeyWordsFromMms;
         }
 
         private void Cc_ExecutingWebRequest(object sender, WebRequestEventArgs e)
         {
             // Capture the OAuth access token since we want to reuse that one in our REST requests
-            this.accessToken = e.WebRequestExecutor.RequestHeaders.Get("Authorization").Replace("Bearer ", "");
+            _accessToken = e.WebRequestExecutor.RequestHeaders.Get("Authorization").Replace("Bearer ", "");
         }
         #endregion
     }

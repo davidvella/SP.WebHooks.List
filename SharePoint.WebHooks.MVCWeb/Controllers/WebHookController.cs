@@ -39,7 +39,7 @@ namespace SharePoint.WebHooks.MVCWeb.Controllers
             if (notifications.Count > 0)
             {                
                 // do something with the received notification
-                ChangeManager changeManager = new ChangeManager();
+                var changeManager = new ChangeManager();
                 foreach(var notification in notifications)
                 {
                     // Recommended async pattern: this request must be processed within 5 seconds,

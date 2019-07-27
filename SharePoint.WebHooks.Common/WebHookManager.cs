@@ -30,8 +30,8 @@ namespace SharePoint.WebHooks.Common
             string responseString = null;
             using (var httpClient = new HttpClient())
             {
-                string requestUrl = String.Format("{0}/_api/web/lists('{1}')/subscriptions", siteUrl, listId);
-                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
+                var requestUrl = String.Format("{0}/_api/web/lists('{1}')/subscriptions", siteUrl, listId);
+                var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -44,7 +44,7 @@ namespace SharePoint.WebHooks.Common
                     }),
                     Encoding.UTF8, "application/json");
 
-                HttpResponseMessage response = await httpClient.SendAsync(request);
+                var response = await httpClient.SendAsync(request);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -76,8 +76,8 @@ namespace SharePoint.WebHooks.Common
         {
             using (var httpClient = new HttpClient())
             {
-                string requestUrl = String.Format("{0}/_api/web/lists('{1}')/subscriptions('{2}')", siteUrl, listId, subscriptionId);
-                HttpRequestMessage request = new HttpRequestMessage(new HttpMethod("PATCH"), requestUrl);
+                var requestUrl = $"{siteUrl}/_api/web/lists('{listId}')/subscriptions('{subscriptionId}')";
+                var request = new HttpRequestMessage(new HttpMethod("PATCH"), requestUrl);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -89,7 +89,7 @@ namespace SharePoint.WebHooks.Common
                     }),
                     Encoding.UTF8, "application/json");
 
-                HttpResponseMessage response = await httpClient.SendAsync(request);
+                var response = await httpClient.SendAsync(request);
 
                 if (response.StatusCode != System.Net.HttpStatusCode.NoContent)
                 {
@@ -117,12 +117,12 @@ namespace SharePoint.WebHooks.Common
         {
             using (var httpClient = new HttpClient())
             {
-                string requestUrl = String.Format("{0}/_api/web/lists('{1}')/subscriptions('{2}')", siteUrl, listId, subscriptionId);
-                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Delete, requestUrl);
+                var requestUrl = String.Format("{0}/_api/web/lists('{1}')/subscriptions('{2}')", siteUrl, listId, subscriptionId);
+                var request = new HttpRequestMessage(HttpMethod.Delete, requestUrl);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
-                HttpResponseMessage response = await httpClient.SendAsync(request);
+                var response = await httpClient.SendAsync(request);
 
                 if (response.StatusCode != System.Net.HttpStatusCode.NoContent)
                 {
@@ -150,12 +150,12 @@ namespace SharePoint.WebHooks.Common
             string responseString = null;
             using (var httpClient = new HttpClient())
             {
-                string requestUrl = String.Format("{0}/_api/web/lists('{1}')/subscriptions", siteUrl, listId);
-                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+                var requestUrl = String.Format("{0}/_api/web/lists('{1}')/subscriptions", siteUrl, listId);
+                var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
-                HttpResponseMessage response = await httpClient.SendAsync(request);
+                var response = await httpClient.SendAsync(request);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -183,12 +183,12 @@ namespace SharePoint.WebHooks.Common
             string responseString = null;
             using (var httpClient = new HttpClient())
             {
-                string requestUrl = String.Format("{0}/_api/web/lists('{1}')/subscriptions('{2}')", siteUrl, listId, subscriptionId);
-                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+                var requestUrl = String.Format("{0}/_api/web/lists('{1}')/subscriptions('{2}')", siteUrl, listId, subscriptionId);
+                var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
-                HttpResponseMessage response = await httpClient.SendAsync(request);
+                var response = await httpClient.SendAsync(request);
 
                 if (response.IsSuccessStatusCode)
                 {

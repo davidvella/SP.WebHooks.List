@@ -31,7 +31,7 @@ namespace SharePoint.WebHooks.Common.TextAnalytics
         {
             if (request == null)
             {
-                throw new ArgumentNullException("request");
+                throw new ArgumentNullException(nameof(request));
             }
 
             request.Headers.Add("Ocp-Apim-Subscription-Key", this.subscriptionKey);
