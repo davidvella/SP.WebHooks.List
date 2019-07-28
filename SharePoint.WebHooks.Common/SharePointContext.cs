@@ -416,8 +416,7 @@ namespace SharePoint.WebHooks.Common
 
             // SPAppWebUrl
             var spAppWebUrlString = TokenHelper.EnsureTrailingSlash(httpRequest.QueryString[SharePointContext.SPAppWebUrlKey]);
-            Uri spAppWebUrl;
-            if (!Uri.TryCreate(spAppWebUrlString, UriKind.Absolute, out spAppWebUrl) ||
+            if (!Uri.TryCreate(spAppWebUrlString, UriKind.Absolute, out var spAppWebUrl) ||
                 !(spAppWebUrl.Scheme == Uri.UriSchemeHttp || spAppWebUrl.Scheme == Uri.UriSchemeHttps))
             {
                 spAppWebUrl = null;
@@ -439,12 +438,7 @@ namespace SharePoint.WebHooks.Common
 
             // SPProductNumber
             var spProductNumber = httpRequest.QueryString[SharePointContext.SPProductNumberKey];
-            if (string.IsNullOrEmpty(spProductNumber))
-            {
-                return null;
-            }
-
-            return CreateSharePointContext(spHostUrl, spAppWebUrl, spLanguage, spClientTag, spProductNumber, httpRequest);
+            return string.IsNullOrEmpty(spProductNumber) ? null : CreateSharePointContext(spHostUrl, spAppWebUrl, spLanguage, spClientTag, spProductNumber, httpRequest);
         }
 
         /// <summary>
@@ -466,7 +460,7 @@ namespace SharePoint.WebHooks.Common
         {
             if (httpContext == null)
             {
-                throw new ArgumentNullException("httpContext");
+                throw new ArgumentNullException(nameof(httpContext));
             }
 
             var spHostUrl = SharePointContext.GetSPHostUrl(httpContext.Request);

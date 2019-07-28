@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using MoreLinq;
 
 namespace SharePoint.WebHooks.Common
 {
@@ -24,7 +25,7 @@ namespace SharePoint.WebHooks.Common
     {
         #region Constants and variables
         public const string StorageQueueName = "sharepointlistwebhookevent";
-        private string _accessToken = null;
+        private string _accessToken;
         #endregion
 
         #region Async processing...add item to queue
@@ -39,7 +40,7 @@ namespace SharePoint.WebHooks.Common
 
             // Get queue... create if does not exist.
             var queueClient = storageAccount.CreateCloudQueueClient();
-            var queue = queueClient.GetQueueReference(ChangeManager.StorageQueueName);
+            var queue = queueClient.GetQueueReference(StorageQueueName);
             queue.CreateIfNotExists();
 
             // add message to the queue
@@ -65,7 +66,10 @@ namespace SharePoint.WebHooks.Common
                 var clientId = CloudConfigurationManager.GetSetting("ClientId");
                 var clientSecret = CloudConfigurationManager.GetSetting("ClientSecret");
 
-                cc = new Uri(url).DnsSafeHost.Contains("spoppe.com") ? am.GetAppOnlyAuthenticatedContext(url, realm, clientId, clientSecret, acsHostUrl: "windows-ppe.net", globalEndPointPrefix: "login") : am.GetAppOnlyAuthenticatedContext(url, clientId, clientSecret);
+                cc = new Uri(url).DnsSafeHost.Contains("spoppe.com")
+                    ? am.GetAppOnlyAuthenticatedContext(url, realm, clientId, clientSecret,
+                        acsHostUrl: "windows-ppe.net", globalEndPointPrefix: "login")
+                    : am.GetAppOnlyAuthenticatedContext(url, clientId, clientSecret);
 
                 cc.ExecutingWebRequest += Cc_ExecutingWebRequest;
                 #endregion
@@ -73,7 +77,7 @@ namespace SharePoint.WebHooks.Common
                 #region Grab the list for which the web hook was triggered
                 var lists = cc.Web.Lists;
                 var listId = new Guid(notification.Resource);
-                var results = cc.LoadQuery<List>(lists.Where(lst => lst.Id == listId));
+                var results = cc.LoadQuery(lists.Where(lst => lst.Id == listId));
                 cc.ExecuteQueryRetry();
                 var changeList = results.FirstOrDefault();
                 if (changeList == null)
@@ -137,13 +141,15 @@ namespace SharePoint.WebHooks.Common
                         cc.Load(changes);
                         cc.ExecuteQueryRetry();
 
-                        if (changes.Count > 0)
+                        // If item is changed more than once
+                        var uniqueChanges = changes.Cast<ChangeItem>().AsEnumerable().DistinctBy(change => change.ItemId).ToList();
+
+                        if (uniqueChanges.Any())
                         {
-                            foreach (var change in changes)
+                            foreach (var change in uniqueChanges)
                             {
                                 lastChangeToken = change.ChangeToken;
 
-                                if (!(change is ChangeItem)) continue;
                                 try
                                 {
                                     // do "work" with the found change
@@ -207,7 +213,7 @@ namespace SharePoint.WebHooks.Common
                         notification.SubscriptionId,
                         CloudConfigurationManager.GetSetting("WebHookEndPoint"),
                         DateTime.Now.AddMonths(3),
-                        this._accessToken)
+                        _accessToken)
                 ).Result;
 
                 if (updateResult.Result == false)
@@ -224,13 +230,13 @@ namespace SharePoint.WebHooks.Common
             }
             finally
             {
+                // ReSharper disable once ConstantConditionalAccessQualifier
                 cc?.Dispose();
             }
         }
 
         /// <summary>
         /// Method doing actually something with the changes obtained via the web hook notification. 
-        /// In this demo we're just logging to a list, in your implementation you do what you need to do :-)
         /// </summary>
         private static void DoWork(ClientContext cc, List changeList, Change change)
         {
@@ -243,10 +249,11 @@ namespace SharePoint.WebHooks.Common
             var streamResult = targetListItem.File.OpenBinaryStream();
             cc.ExecuteQueryRetry();
 
-            // Get Text Rendition
+            // Get Text Rendition of document binary
             var tika = new Tika();
             var textFromStream = tika.ParseToString(streamResult.Value);
 
+            // Get Key phrases from text rendition
             var client = new TextAnalyticsClient();
             var result = client.KeyPhrasesStringAsync(textFromStream).Result;
 
@@ -258,7 +265,7 @@ namespace SharePoint.WebHooks.Common
             var txField = cc.CastTo<TaxonomyField>(field);
 
             var matchedTerms = GetMatchedKeywordsFromMms(keyPhrases,
-                GetTermsFromMMS(cc, CloudConfigurationManager.GetSetting("TaxonomyTermSetId")));
+                GetTermsFromMms(cc, CloudConfigurationManager.GetSetting("TaxonomyTermSetId")));
 
             Trace.TraceInformation($"Matched Terms: {string.Join(",", matchedTerms.Select(term => term.Name))}");
 
@@ -272,12 +279,12 @@ namespace SharePoint.WebHooks.Common
         }
 
         /// <summary>
-        /// 
+        /// Return all term from the term store of the specified term set id.
         /// </summary>
-        /// <param name="cc"></param>
+        /// <param name="cc">The Client Context</param>
         /// <param name="guidOfTermSet"></param>
         /// <returns></returns>
-        private static TermCollection GetTermsFromMMS(ClientContext cc, string guidOfTermSet)
+        private static TermCollection GetTermsFromMms(ClientContext cc, string guidOfTermSet)
         {
             if (cc == null) throw new ArgumentNullException(nameof(cc));
             if (guidOfTermSet == null) throw new ArgumentNullException(nameof(guidOfTermSet));
@@ -309,7 +316,7 @@ namespace SharePoint.WebHooks.Common
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="uniqueKeywords"></param>
+        /// <param name="keywords"></param>
         /// <param name="allTermsFromTermSet"></param>
         /// <returns></returns>
         private static List<Term> GetMatchedKeywordsFromMms(IEnumerable<string> keywords, TermCollection allTermsFromTermSet)
