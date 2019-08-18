@@ -240,6 +240,12 @@ namespace SharePoint.WebHooks.Common
         /// </summary>
         private static void DoWork(ClientContext cc, List changeList, Change change)
         {
+            //Get Fields, if no fields then don't do anything
+            var taxonomyTerms = CloudConfigurationManager.GetSetting("TaxonomyTermNames")
+                ?.Split(",".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+            if (!taxonomyTerms.Any()) return;
+
             // Get the list item from the Change List
             // Note that this is the ID of the item in the list, not a reference to its position.
             var targetListItem = changeList.GetItemById(((ChangeItem) change).ItemId);
@@ -249,33 +255,92 @@ namespace SharePoint.WebHooks.Common
             var streamResult = targetListItem.File.OpenBinaryStream();
             cc.ExecuteQueryRetry();
 
-            // Get Text Rendition of document binary
-            var tika = new Tika();
-            var textFromStream = tika.ParseToString(streamResult.Value);
+            string textFromStream;
+
+            try
+            {
+                // Get Text Rendition of document binary
+                var tika = new Tika();
+                textFromStream = tika.ParseToString(streamResult.Value);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"Tika Error: {ex}");
+                return;
+            }
 
             // Get Key phrases from text rendition
             var client = new TextAnalyticsClient();
-            var result = client.KeyPhrasesStringAsync(textFromStream).Result;
+            var result = client.GetStringPhrasesEntities(textFromStream).Result;
 
             // list of distinct key phrases
-            var keyPhrases = result.Documents.SelectMany(row => row.KeyPhrases).Distinct().ToList();
+            var keyPhrases = result as string[] ?? result.ToArray();
             Trace.TraceInformation($"Key Phrases: {string.Join(",", keyPhrases)}");
 
-            var field = changeList.Fields.GetByInternalNameOrTitle(CloudConfigurationManager.GetSetting("TaxonomyTermName"));
-            var txField = cc.CastTo<TaxonomyField>(field);
+            try
+            {
+                var results = taxonomyTerms.Select(term =>
+                    SetTaxFieldValueAgainstKeyPhrase(cc, changeList, targetListItem, term, keyPhrases)).ToList();
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceError($"Error: {ex}");
+            }
 
-            var matchedTerms = GetMatchedKeywordsFromMms(keyPhrases,
-                GetTermsFromMms(cc, CloudConfigurationManager.GetSetting("TaxonomyTermSetId")));
+        }
 
-            Trace.TraceInformation($"Matched Terms: {string.Join(",", matchedTerms.Select(term => term.Name))}");
+        private enum Result { Pass, Fail };
 
-            //Create Taxonomy Field Value
-            var taxonomyFieldValue = string.Join(";#", matchedTerms.Select(term => $"-1;#{term.Name}|{term.Id}"));
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="context"></param>
+        /// <param name="changeList"></param>
+        /// <param name="item"></param>
+        /// <param name="taxonomyTermName"></param>
+        /// <param name="keyPhrases"></param>
+        /// <returns></returns>
+        private static Result SetTaxFieldValueAgainstKeyPhrase(ClientContext context,List changeList, ListItem item, string taxonomyTermName, IEnumerable<string> keyPhrases)
+        {
+            try
+            {
+                Trace.TraceInformation($"TermName: {taxonomyTermName}");
 
-            var tx = new TaxonomyFieldValueCollection(cc, taxonomyFieldValue, field);
-            txField.SetFieldValueByValueCollection(targetListItem, tx);
-            targetListItem.SystemUpdate();
-            cc.ExecuteQueryRetry();
+                // Get Field and cast to taxonomy
+                var txField = context.CastTo<TaxonomyField>(
+                    changeList.Fields.GetByInternalNameOrTitle(
+                        taxonomyTermName));
+                context.Load(txField);
+                context.ExecuteQuery();
+
+                if(!txField.AllowMultipleValues) throw new ArgumentException("Can only set values on Taxonomy Fields that allow Multiple Values.");
+
+                Trace.TraceInformation($"TermSetId: {txField.TermSetId}");
+
+                var matchedTerms = GetMatchedKeywordsFromMms(keyPhrases,
+                    GetTermsFromMms(context, txField.TermSetId));
+
+                Trace.TraceInformation($"Matched Terms: {string.Join(",", matchedTerms.Select(term => term.Name))}");
+
+                //Create Taxonomy Field Value and set on item.
+                var taxonomyFieldValue = string.Join(";#", matchedTerms.Select(term => $"-1;#{term.Name}|{term.Id}"));
+                var tx = new TaxonomyFieldValueCollection(context, taxonomyFieldValue, txField);
+                txField.SetFieldValueByValueCollection(item, tx);
+
+                item.SystemUpdate();
+                context.ExecuteQuery();
+
+                return Result.Pass;
+            }
+            catch (Exception ex)
+            {
+                // This occurs either because: 
+                // 1. The column does not exist.
+                // 2. The column is not a Taxonomy Field
+                // 3. The column doesn't allow Multiple Values. The will error as it is not supported.
+                Trace.TraceWarning($"Error: {ex}");
+                return Result.Fail;
+            }
         }
 
         /// <summary>
@@ -283,8 +348,8 @@ namespace SharePoint.WebHooks.Common
         /// </summary>
         /// <param name="cc">The Client Context</param>
         /// <param name="guidOfTermSet"></param>
-        /// <returns></returns>
-        private static TermCollection GetTermsFromMms(ClientContext cc, string guidOfTermSet)
+        /// <returns>All term from the term store of the specified term set id.</returns>
+        private static TermCollection GetTermsFromMms(ClientContext cc, Guid guidOfTermSet)
         {
             if (cc == null) throw new ArgumentNullException(nameof(cc));
             if (guidOfTermSet == null) throw new ArgumentNullException(nameof(guidOfTermSet));
@@ -304,7 +369,7 @@ namespace SharePoint.WebHooks.Common
             cc.ExecuteQuery();
 
             //Requires you know the GUID of your Term Set, and the Name.
-            var termSet = termStore.GetTermSet(new Guid(guidOfTermSet));
+            var termSet = termStore.GetTermSet(guidOfTermSet);
             var terms = termSet.GetAllTerms();
             cc.Load(terms);
             cc.Load(termSet);

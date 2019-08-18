@@ -1,12 +1,11 @@
 ﻿using Microsoft.Azure;
 using Microsoft.Azure.CognitiveServices.Language.TextAnalytics;
 using Microsoft.Azure.CognitiveServices.Language.TextAnalytics.Models;
-using Microsoft.Rest;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using SharePoint.WebHooks.Common.Utils;
 
 namespace SharePoint.WebHooks.Common.TextAnalytics
 {
@@ -20,86 +19,103 @@ namespace SharePoint.WebHooks.Common.TextAnalytics
     /// </summary>
     class TextAnalyticsClient : Microsoft.Azure.CognitiveServices.Language.TextAnalytics.TextAnalyticsClient
     {
+        private const int MaxDocumentInRequest = 1000;
+
         public TextAnalyticsClient() : base(new ApiKeyServiceClientCredentials(CloudConfigurationManager.GetSetting("TextAnalyticsApiKey")))
         {
             Endpoint = CloudConfigurationManager.GetSetting("TextAnalyticsEndpoint");
         }
 
         /// <summary>
-        /// The API returns a list of strings denoting the key talking points in the input text.
+        /// The API returns a list of strings denoting the key talking points in the
+        /// input text.
         /// </summary>
-        /// <param name="text"> </param>
-        /// <param name="showStats">(optional) if set to true, response will contain input and document level statistics.</param>
+        /// <remarks>
+        /// See the &lt;a
+        /// href="https://docs.microsoft.com/en-us/azure/cognitive-services/text-analytics/overview#supported-languages"&gt;Text
+        /// Analytics Documentation&lt;/a&gt; for details about the languages that are
+        /// supported by key phrase extraction.
+        /// </remarks>
+        /// <param name="text">
+        /// The text to be passed to the Text Analytics Api
+        /// </param>
+        /// <param name="showStats">
+        /// (optional) if set to true, response will contain input and document level
+        /// statistics.
+        /// </param>
         /// <param name="cancellationToken">The cancellation token.</param>
-        /// <remarks>See the <a href="https://docs.microsoft.com/en-us/azure/cognitive-services/text-analytics/overview#supported-languages">Text Analytics Documentation</a> for details about the languages that are supported by key phrase extraction.</remarks>
         public async Task<KeyPhraseBatchResult> KeyPhrasesStringAsync(string text, bool? showStats = null, CancellationToken cancellationToken = default)
         {
+            return await this.KeyPhrasesAsync(showStats, new MultiLanguageBatchInput(await GetMultiLanguageInput(text, showStats, cancellationToken)), cancellationToken);
+        }
+
+        /// <summary>
+        /// The API returns a list of recognized entities in a given document.
+        /// </summary>
+        /// <remarks>
+        /// To get even more information on each recognized entity we recommend using
+        /// the Bing Entity Search API by querying for the recognized entities names.
+        /// See the &lt;a
+        /// href="https://docs.microsoft.com/en-us/azure/cognitive-services/text-analytics/text-analytics-supported-languages"&gt;Supported
+        /// languages in Text Analytics API&lt;/a&gt; for the list of enabled
+        /// languages.
+        /// </remarks>
+        /// <param name="text">
+        /// The text to be passed to the Text Analytics Api
+        /// </param>
+        /// <param name="showStats">
+        /// (optional) if set to true, response will contain input and document level
+        /// statistics.
+        /// </param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        public async Task<EntitiesBatchResult> EntitiesStringAsync(string text, bool? showStats = null, CancellationToken cancellationToken = default)
+        {
+            return await this.EntitiesAsync(showStats, new MultiLanguageBatchInput(await GetMultiLanguageInput(text, showStats, cancellationToken)), cancellationToken);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="text"></param>
+        /// <param name="showStats"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task<IEnumerable<string>> GetStringPhrasesEntities(string text, bool? showStats = null, CancellationToken cancellationToken = default)
+        {
+            var input = await GetMultiLanguageInput(text, showStats, cancellationToken);
+
+            // Get Entities and KeyPhrases
+            var entities = this.EntitiesAsync(showStats, new MultiLanguageBatchInput(input), cancellationToken);
+            var phrases = this.KeyPhrasesAsync(showStats, new MultiLanguageBatchInput(input), cancellationToken);
+
+            await Task.WhenAll(phrases, entities);
+
+            // Select Strings from both results
+            var phrasesStrings = phrases.Result.Documents.SelectMany(row => row.KeyPhrases).ToList();
+            var entitiesStrings = entities.Result.Documents
+                .SelectMany(row => row.Entities.Select(entity => entity.Name)).ToList();
+
+            return phrasesStrings.Union(entitiesStrings).Distinct();
+        }
+
+        private async Task<IList<MultiLanguageInput>> GetMultiLanguageInput(string text, bool? showStats = null, CancellationToken cancellationToken = default)
+        {
             // Get Sentences from string
-            var sentences = FormatTextToSentences(text);
+            var sentences = StringUtils.FormatTextToSentences(text);
 
             // Get language of inputs
-            var languageInput = new List<LanguageInput>();
-            var i = 0;
-            foreach (var s in sentences)
-            {
-                if (s.Length > 10) languageInput.Add(new LanguageInput(id: i.ToString(), text: s));
-                i++;
-            }
+            var languageInput = sentences.Select((sentence, index) => new LanguageInput(id: index.ToString(), text: sentence)).Take(MaxDocumentInRequest).ToArray();
+
             var langResults = await this.DetectLanguageAsync(showStats, new LanguageBatchInput(languageInput), cancellationToken);
 
-            // Make Key Phrases Service
-            var inputDocuments = new List<MultiLanguageInput>();
-            foreach (var doc in langResults.Documents)
-            {
-                inputDocuments.Add(new MultiLanguageInput(doc.DetectedLanguages.First().Iso6391Name, doc.Id, languageInput.First(inp => inp.Id == doc.Id).Text));
-            }
+            // Make MultiLanguageInput
+            var inputDocuments = langResults.Documents.Select(doc =>
+                new MultiLanguageInput(doc.DetectedLanguages.OrderByDescending(lang => lang.Score).First().Iso6391Name,
+                    doc.Id, languageInput[int.Parse(doc.Id)].Text)).ToArray();
 
-            return await this.KeyPhrasesAsync(null, new MultiLanguageBatchInput(inputDocuments), cancellationToken);
+            return inputDocuments;
         }
-
-        private static List<string> FormatTextToSentences(string text)
-        {
-            // sanitize text a bit
-            text = Regex.Replace(text, @"[\r\n\t\f\v]", " ");
-            // remove extremely long words - they'll be headers, malformed parts or urls
-            text = Regex.Replace(text, @"\S{30,}", " ", RegexOptions.None);
-            // remove numbers and everything else but text.
-            text = Regex.Replace(text, @"[^a-zA-Z.,'!?äöåü]", " ", RegexOptions.IgnoreCase);
-            // lastly, remove extra whitespace
-            text = Regex.Replace(text, @"( +)", " ");
-
-            var regExSentenceDelimiter = new Regex(@"(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?)\s");
-            var sentences = regExSentenceDelimiter.Split(text).ToList();
-
-            // figure out, which sentence length we're using based on set accuracylevel. The default value is 5120 (set by the API)
-            const int limit = 2560;
-
-            var finalizedSentences = new List<string>();
-
-            var sentenceCandidate = "";
-            foreach (var sentence in sentences)
-            {
-                // SANITIZE AND SPLIT
-                // drop short sentences (they'll be like "et al", one-liners like "go figure" or just "."
-                if (sentence.Length < 10) continue;
-
-                // combine or add other sentences
-                if (sentenceCandidate.Length + sentence.Length > limit)
-                {
-                    finalizedSentences.Add(sentenceCandidate);
-                    sentenceCandidate = sentence;
-                }
-                else
-                {
-                    sentenceCandidate += " " + sentence;
-                }
-            }
-            // finally, add the last candidate
-            finalizedSentences.Add(sentenceCandidate);
-
-            return finalizedSentences;
-        }
-
+        
     }
         
 }

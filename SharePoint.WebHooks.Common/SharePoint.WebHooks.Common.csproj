@@ -311,6 +311,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ChangeManager.cs" />
+    <Compile Include="Extensions\IListExtension.cs" />
     <Compile Include="Models\NotificationModel.cs" />
     <Compile Include="Models\ResponseModel.cs" />
     <Compile Include="Models\SubscriptionModel.cs" />
@@ -338,6 +339,7 @@
     <Compile Include="TextAnalytics\ApiKeyServiceClientCredentials.cs" />
     <Compile Include="TextAnalytics\TextAnalyticsClient.cs" />
     <Compile Include="TokenHelper.cs" />
+    <Compile Include="Utils\StringUtils.cs" />
     <Compile Include="WebHookManager.cs" />
   </ItemGroup>
   <ItemGroup>
